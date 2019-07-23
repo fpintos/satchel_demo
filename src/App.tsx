@@ -2,26 +2,36 @@ import React, { useCallback } from 'react';
 import { createStore, action, mutator, orchestrator } from 'satcheljs';
 import { applyMiddleware, DispatchFunction, ActionMessage } from 'satcheljs';
 import { observer } from 'mobx-react-lite';
+import { TextField, PrimaryButton, ActionButton } from 'office-ui-fabric-react';
+import { Depths } from '@uifabric/fluent-theme/lib/fluent/FluentDepths';
 import './App.css';
 
 // Styles
-const style = { margin: 20 };
+const style: React.CSSProperties = { margin: 20 };
+const boxStyle: React.CSSProperties = {
+    boxShadow: Depths.depth8,
+    padding: 20,
+    width: 400,
+    marginBottom: 5,
+};
 
 // UI elements
 export default observer(function ToDo() {
     return (
         <div style={style}>
-            <form onSubmit={onFormSubmit}>
-                Enter a new TODO:
-                <br />
-                <input type="text" value={getInputText()} onChange={onInputTextChange} />
-                <button type="submit">ADD</button>
+            <form onSubmit={onFormSubmit} style={boxStyle}>
+                <TextField
+                    label="Enter a new TODO:"
+                    value={getInputText()}
+                    onChange={onInputTextChange}
+                />
+                <PrimaryButton iconProps={{ iconName: 'Add' }} type="submit">
+                    Add
+                </PrimaryButton>
             </form>
-            <ul>
-                {getToDos().map((todo, i) => (
-                    <ToDoElement key={i} index={i} todo={todo} />
-                ))}
-            </ul>
+            {getToDos().map((todo, i) => (
+                <ToDoElement key={i} index={i} todo={todo} />
+            ))}
         </div>
     );
 });
@@ -29,11 +39,16 @@ export default observer(function ToDo() {
 const ToDoElement = observer(function ToDoElement({ index, todo }: { index: number; todo: ToDo }) {
     const deleteCallback = useCallback(() => deleteTodo(index), [index]);
     return (
-        <li>
-            <span>{new Date(todo.whenCreated).toISOString()}</span>
-            <span style={{ margin: '0px 20px' }}>{todo.text}</span>
-            <button onClick={deleteCallback}>DELETE</button>
-        </li>
+        <div style={boxStyle}>
+            <TextField
+                label={new Date(todo.whenCreated).toISOString()}
+                value={todo.text}
+                disabled={true}
+            />
+            <ActionButton iconProps={{ iconName: 'Delete' }} onClick={deleteCallback}>
+                DELETE
+            </ActionButton>
+        </div>
     );
 });
 
@@ -43,8 +58,11 @@ function onFormSubmit(e: React.FormEvent) {
     e.preventDefault();
 }
 
-function onInputTextChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setInputText(e.target.value);
+function onInputTextChange(
+    e: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>,
+    newValue: string | undefined
+) {
+    setInputText(newValue || '');
 }
 
 // State and Business logic of the UI
