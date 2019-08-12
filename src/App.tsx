@@ -1,10 +1,10 @@
-import React, { useCallback } from 'react';
-import { createStore, action, mutator, orchestrator } from 'satcheljs';
-import { applyMiddleware, DispatchFunction, ActionMessage } from 'satcheljs';
+import React from 'react';
+import { createStore, action, mutator } from 'satcheljs';
 import { observer } from 'mobx-react-lite';
-import { TextField, PrimaryButton, ActionButton } from 'office-ui-fabric-react';
+import { TextField, PrimaryButton } from 'office-ui-fabric-react';
 import { Depths } from '@uifabric/fluent-theme/lib/fluent/FluentDepths';
 import './App.css';
+import knowledge from './knowledge.json';
 
 // Styles
 const style: React.CSSProperties = { margin: 20 };
@@ -16,45 +16,78 @@ const boxStyle: React.CSSProperties = {
 };
 
 // UI elements
-export default observer(function ToDo() {
+export default observer(function QuestionOrAnswerNode() {
+    const answerNode = isAnswerNode();
     return (
         <div style={style}>
-            <form onSubmit={onFormSubmit} style={boxStyle}>
-                <TextField
-                    label="Enter a new TODO:"
-                    value={getInputText()}
-                    onChange={onInputTextChange}
-                />
-                <PrimaryButton iconProps={{ iconName: 'Add' }} type="submit">
-                    Add
+            <div style={{ marginBottom: 20 }}>
+                <PrimaryButton iconProps={{ iconName: 'Save' }} onClick={saveGame}>
+                    Save
                 </PrimaryButton>
-            </form>
-            {getToDos().map((todo, i) => (
-                <ToDoElement key={i} index={i} todo={todo} />
-            ))}
-        </div>
-    );
-});
-
-const ToDoElement = observer(function ToDoElement({ index, todo }: { index: number; todo: ToDo }) {
-    const deleteCallback = useCallback(() => deleteTodo(index), [index]);
-    return (
-        <div style={boxStyle}>
-            <TextField
-                label={new Date(todo.whenCreated).toISOString()}
-                value={todo.text}
-                disabled={true}
-            />
-            <ActionButton iconProps={{ iconName: 'Delete' }} onClick={deleteCallback}>
-                DELETE
-            </ActionButton>
+                &nbsp;
+                <PrimaryButton iconProps={{ iconName: 'OpenFolderHorizontal' }} onClick={loadGame}>
+                    Load
+                </PrimaryButton>
+                &nbsp;
+                <PrimaryButton iconProps={{ iconName: 'Refresh' }} onClick={resetGame}>
+                    Reset
+                </PrimaryButton>
+            </div>
+            {answerNode && (
+                <div>
+                    {!getGuessIsWrong() && (
+                        <div>
+                            <p>I think it is {getCurrentText()}.</p>
+                            <p>Did I guess correctly?</p>
+                            <PrimaryButton
+                                iconProps={{ iconName: 'CheckMark' }}
+                                onClick={guessIsCorrect}>
+                                Yes
+                            </PrimaryButton>
+                            &nbsp;
+                            <PrimaryButton
+                                iconProps={{ iconName: 'Cancel' }}
+                                onClick={guessIsWrong}>
+                                No
+                            </PrimaryButton>
+                        </div>
+                    )}
+                    {getGuessIsWrong() && (
+                        <div>
+                            <form onSubmit={onFormSubmit} style={boxStyle}>
+                                <TextField
+                                    label={getInputLabel()}
+                                    value={getInputText()}
+                                    onChange={onInputTextChange}
+                                />
+                                <PrimaryButton iconProps={{ iconName: 'CheckMark' }} type="submit">
+                                    OK
+                                </PrimaryButton>
+                            </form>
+                        </div>
+                    )}
+                </div>
+            )}
+            {!answerNode && (
+                <div>
+                    {getCurrentText()}
+                    <br />
+                    <PrimaryButton iconProps={{ iconName: 'CheckMark' }} onClick={moveLeft}>
+                        Yes
+                    </PrimaryButton>
+                    &nbsp;
+                    <PrimaryButton iconProps={{ iconName: 'Cancel' }} onClick={moveRight}>
+                        No
+                    </PrimaryButton>
+                </div>
+            )}
         </div>
     );
 });
 
 // UI event handlers
 function onFormSubmit(e: React.FormEvent) {
-    addTodo();
+    onNewAnswer();
     e.preventDefault();
 }
 
@@ -66,52 +99,125 @@ function onInputTextChange(
 }
 
 // State and Business logic of the UI
-export interface ToDo {
-    text: string;
-    whenCreated: number;
-}
-
-const getStore = createStore('todoStore', {
-    inputText: 'Hello',
-    todos: [{ text: 'Initial', whenCreated: Date.now() }] as ToDo[],
+const getStore = createStore('questions', {
+    index: 0,
+    guessIsWrong: false,
+    askingForName: false,
+    newName: '',
+    newQuestion: '',
+    strings: knowledge as string[],
 });
 
 // Selectors
-function getInputText() {
-    return getStore().inputText;
+function getNextLeftIndex() {
+    return 2 * getStore().index + 1;
 }
 
-function getToDos() {
-    return getStore().todos;
+function getNextRightIndex() {
+    return 2 * getStore().index + 2;
+}
+
+function getCurrentText() {
+    const { index, strings } = getStore();
+    return strings[index];
+}
+
+function getGuessIsWrong() {
+    return getStore().guessIsWrong;
+}
+
+function isAnswerNode() {
+    const { strings } = getStore();
+    return !strings[getNextLeftIndex()] && !strings[getNextRightIndex()];
+}
+
+function getInputLabel() {
+    return getStore().askingForName
+        ? 'Well done, you beat me. What was your object?'
+        : `Type a question that is true for ${
+              getStore().newName
+          }, but not for ${getCurrentText()}.`;
+}
+
+function getInputText() {
+    return getStore().askingForName ? getStore().newName : getStore().newQuestion;
 }
 
 // Actions
+const moveLeft = action('moveLeft');
+const moveRight = action('moveRight');
+const guessIsCorrect = action('guessIsCorrect');
+const guessIsWrong = action('guessIsWrong');
+
 const setInputText = action('setInputText', (text: string) => ({ text }));
-const addTodo = action('addTodo');
-const deleteTodo = action('deleteTodo', (index: number) => ({ index }));
+const onNewAnswer = action('onNewAnswer');
+
+const saveGame = action('saveGame');
+const loadGame = action('loadGame');
+const resetGame = action('resetGame');
 
 // Mutators (ie, action handlers)
+mutator(moveLeft, () => {
+    getStore().index = getNextLeftIndex();
+});
+
+mutator(moveRight, () => {
+    getStore().index = getNextRightIndex();
+});
+
+mutator(guessIsCorrect, () => {
+    startOver();
+});
+
+mutator(guessIsWrong, () => {
+    getStore().guessIsWrong = true;
+    getStore().askingForName = true;
+    getStore().newName = '';
+    getStore().newQuestion = '';
+});
+
 mutator(setInputText, ({ text }) => {
-    getStore().inputText = text;
+    if (getStore().askingForName) {
+        getStore().newName = text;
+    } else {
+        getStore().newQuestion = text;
+    }
 });
 
-mutator(addTodo, () => {
-    getStore().todos.push({ text: getInputText(), whenCreated: Date.now() });
+mutator(onNewAnswer, () => {
+    if (getStore().askingForName) {
+        getStore().askingForName = false;
+    } else {
+        const { strings, index, newQuestion, newName } = getStore();
+
+        const rightIndex = getNextRightIndex();
+        while (strings.length < rightIndex) {
+            strings.push('');
+        }
+
+        strings[rightIndex] = strings[index];
+        strings[index] = newQuestion;
+        strings[rightIndex - 1] = newName;
+
+        startOver();
+    }
 });
 
-mutator(deleteTodo, ({ index }) => {
-    getStore().todos.splice(index, 1);
+mutator(saveGame, () => {
+    localStorage['strings'] = JSON.stringify(getStore().strings);
 });
 
-// Other parts of the application can also respond to these actions
-orchestrator(addTodo, () => {
-    console.log('Example, invoke a web service to save the new todo');
+mutator(loadGame, () => {
+    startOver();
+    getStore().strings = JSON.parse(localStorage['strings']);
 });
 
-// The application can intercept actions, for logging/telemetry/error handling,etc.
-function logActions(next: DispatchFunction, message: ActionMessage) {
-    console.time(message.type);
-    next(message);
-    console.timeEnd(message.type);
+mutator(resetGame, () => {
+    startOver();
+    getStore().strings = knowledge;
+});
+
+function startOver() {
+    getStore().index = 0;
+    getStore().guessIsWrong = false;
 }
-applyMiddleware(logActions);
